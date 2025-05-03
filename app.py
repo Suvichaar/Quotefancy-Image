@@ -3,12 +3,13 @@ import pandas as pd
 import json
 import re
 import time
+import unicodedata
 from io import StringIO
 
 st.set_page_config(page_title="📸 Image Batch Tool", layout="wide")
 
 # ===================== 🗂️ Tab Setup =====================
-tab1, tab2 = st.tabs(["📤 Upload & Process CSV", "🔍 ALT Text Preview"])
+tab1, tab2 = st.tabs(["📤 Upload & Process CSV", "📥 Map ALT Text from JSONL"])
 
 # ===================== 📤 TAB 1: Upload & Process =====================
 with tab1:
@@ -96,10 +97,42 @@ with tab1:
             # Store for next tab
             st.session_state["processed_df"] = df
 
-# ===================== 🔍 TAB 2: ALT Text Preview =====================
+# ===================== 📥 TAB 2: ALT Text Mapping =====================
 with tab2:
-    st.title("🔍 ALT Text Prompt Preview")
-    if "processed_df" in st.session_state:
-        st.dataframe(st.session_state["processed_df"][["custom_id", "Keyword", "CDN_URL", "prompt"]])
-    else:
-        st.info("Please upload and process a CSV in Tab 1 first.")
+    st.title("📥 Map ALT Text from JSONL Output")
+    uploaded_csv = st.file_uploader("Upload Final CSV (with custom_id)", type=["csv"], key="csv2")
+    uploaded_jsonl = st.file_uploader("Upload JSONL Response File", type=["jsonl"], key="jsonl2")
+
+    def normalize_id(cid):
+        if not isinstance(cid, str):
+            cid = str(cid)
+        cid = unicodedata.normalize("NFKD", cid).strip().lower().replace("–", "-").replace("—", "-")
+        parts = cid.split('-', 1)
+        return parts[1] if len(parts) > 1 else parts[0]
+
+    if uploaded_csv and uploaded_jsonl:
+        df = pd.read_csv(uploaded_csv)
+        df["custom_id_normalized"] = df["custom_id"].apply(normalize_id)
+
+        alt_text_map = {}
+        for line in uploaded_jsonl:
+            try:
+                obj = json.loads(line.decode("utf-8"))
+                raw_id = obj.get("custom_id", "")
+                norm_id = normalize_id(raw_id)
+                content = obj.get("response", {}).get("body", {}).get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+                if content.lower().startswith("alt text:"):
+                    content = content[len("alt text:"):].strip()
+                alt_text_map[norm_id] = content if content else "NOT MATCHED"
+            except Exception as e:
+                st.warning(f"⚠️ Error parsing line: {e}")
+
+        df["alttxt"] = df["custom_id_normalized"].apply(lambda x: alt_text_map.get(x, "NOT MATCHED"))
+        df.drop(columns=["custom_id_normalized"], inplace=True)
+
+        st.subheader("✅ Mapped ALT Text Preview")
+        st.dataframe(df[["custom_id", "alttxt"]])
+
+        timestamp = int(time.time())
+        final_output_name = f"Sheet_Alttxt_Notmatched_{timestamp}.csv"
+        st.download_button("📥 Download Final ALT-Text CSV", data=df.to_csv(index=False), file_name=final_output_name, mime="text/csv")
