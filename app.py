@@ -16,7 +16,7 @@ st.set_page_config(page_title="📸 Image Batch Tool", layout="wide")
 
 # ===================== 🗂️ Tab Setup =====================
 tabs = st.tabs([
-    "📤 Upload & Process CSV",
+    "🖼️ Azure OpenAI ALT Text Generator for Image Metadata",
     "📥 Map ALT Text from JSONL",
     "🧹 Clean Final ALT Text File",
     "🔄 Distribute ALT Images to Author Rows",
@@ -33,56 +33,67 @@ tabs = st.tabs([
 
 # ===================== 📤 TAB 1: Upload & Process =====================
 with tab1:
-    st.title("📤 Image ALT Text Generator & JSONL Preparer")
-
-    uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
-
+    
+    # ============================ 🔐 Azure Configuration ============================
+    client = AzureOpenAI(
+        api_key=st.secrets["azure_api_key"],
+        api_version="2025-03-01-preview",
+        azure_endpoint=st.secrets["azure_endpoint"]
+    )
+    
+    deployment_model = "gpt-4o-global-batch"
+    
+    # ============================ 🎯 App UI ============================
+    st.title("🖼️ Azure OpenAI ALT Text Generator for Image Metadata")
+    
+    uploaded_file = st.file_uploader("📤 Upload CSV with 'Keyword', 'Filename', and 'CDN_URL' columns", type="csv")
+    
     if uploaded_file:
+        ts = str(int(time.time()))
         df = pd.read_csv(uploaded_file)
-
-        # Clean the data
+    
+        # ============================ 🧹 Clean CSV ============================
         df.replace(r'^\s*$', pd.NA, regex=True, inplace=True)
         df.replace("NA", pd.NA, inplace=True)
-
         required_cols = ['Keyword', 'Filename', 'CDN_URL']
+    
         if not all(col in df.columns for col in required_cols):
-            st.error(f"CSV must contain columns: {required_cols}")
+            st.error(f"❌ CSV must contain the columns: {required_cols}")
         else:
             df.dropna(subset=required_cols, inplace=True)
             df.reset_index(drop=True, inplace=True)
-
-            # Generate custom_id
+    
+            # ============================ 🆔 Generate custom_id and prompt ============================
             custom_ids = []
             for idx, row in df.iterrows():
                 filename = row['Filename'].strip()
-                filename_no_ext = re.sub(r"\\.[^.]+$", "", filename)
+                filename_no_ext = re.sub(r"\.[^.]+$", "", filename)
                 custom_ids.append(f"{idx + 1}-{filename_no_ext}")
+    
             df.insert(0, "custom_id", custom_ids)
-
-            # Generate prompt
             df["prompt"] = df["Keyword"].apply(
                 lambda keyword: f"Given the following image URL of a famous personality, generate a short ALT text (max 1–2 sentences) that introduces the {keyword}, including their name, legacy, or profession in a respectful tone suitable for accessibility or SEO purposes."
             )
-
-            # Show processed data
-            st.subheader("✅ Preview Processed Data")
+    
+            # ============================ 💾 Show and Download CSV ============================
+            csv_output_filename = f"Image_Data_Custom_id_prompt_{ts}.csv"
+            st.success("✅ Data processed. Preview below:")
             st.dataframe(df.head())
-
-            # Save CSV
-            timestamp = str(int(time.time()))
-            csv_output_filename = f"Image_Data_Custom_id_prompt_{timestamp}.csv"
-            df.to_csv(csv_output_filename, index=False)
-            st.download_button("📥 Download Processed CSV", data=df.to_csv(index=False), file_name=csv_output_filename, mime="text/csv")
-
-            # Generate JSONL
+            csv_buffer = StringIO()
+            df.to_csv(csv_buffer, index=False)
+            st.download_button("📥 Download CSV with Prompts", csv_buffer.getvalue(), file_name=csv_output_filename, mime="text/csv")
+    
+            # ============================ 🔄 Generate JSONL ============================
+            st.subheader("🧠 Preparing Azure JSONL for batch inference...")
+    
             json_records = []
             for _, row in df.iterrows():
-                record = {
+                json_records.append({
                     "custom_id": row["custom_id"],
                     "method": "POST",
                     "url": "/chat/completions",
                     "body": {
-                        "model": "gpt-4o-global-batch",
+                        "model": deployment_model,
                         "messages": [
                             {
                                 "role": "system",
@@ -91,30 +102,54 @@ with tab1:
                             {
                                 "role": "user",
                                 "content": [
-                                    {
-                                        "type": "text",
-                                        "text": row["prompt"]
-                                    },
-                                    {
-                                        "type": "image_url",
-                                        "image_url": {
-                                            "url": row["CDN_URL"],
-                                            "detail": "high"
-                                        }
-                                    }
+                                    {"type": "text", "text": row["prompt"]},
+                                    {"type": "image_url", "image_url": {"url": row["CDN_URL"], "detail": "high"}}
                                 ]
                             }
                         ],
                         "max_tokens": 1000
                     }
+                })
+    
+            jsonl_filename = f"azure_image_batch_requests_{ts}.jsonl"
+            jsonl_str = "\n".join([json.dumps(item) for item in json_records])
+            st.download_button("📥 Download JSONL File", data=jsonl_str, file_name=jsonl_filename, mime="application/jsonl")
+    
+            # ============================ ⬆️ Upload JSONL to Azure ============================
+            if st.button("🚀 Upload JSONL to Azure and Submit Batch Job"):
+                with st.spinner("Uploading JSONL to Azure..."):
+                    batch_file = client.files.create(
+                        file=StringIO(jsonl_str),
+                        purpose="batch",
+                        extra_body={"expires_after": {"seconds": 1209600, "anchor": "created_at"}}
+                    )
+                    file_id = batch_file.id
+                    st.success("✅ JSONL uploaded to Azure.")
+    
+                # ============================ 🚀 Submit Batch Job ============================
+                with st.spinner("Submitting batch job..."):
+                    batch_job = client.batches.create(
+                        input_file_id=file_id,
+                        endpoint="/chat/completions",
+                        completion_window="24h",
+                        extra_body={"output_expires_after": {"seconds": 1209600, "anchor": "created_at"}}
+                    )
+                    batch_id = batch_job.id
+                    st.success(f"🚀 Batch job submitted! Batch ID: {batch_id}")
+    
+                # ============================ 💾 Save Tracking Info ============================
+                tracking_info = {
+                    "ts": ts,
+                    "batch_id": batch_id,
+                    "file_id": file_id,
+                    "jsonl_file": jsonl_filename,
+                    "csv_file": csv_output_filename
                 }
-                json_records.append(record)
-
-            jsonl_str = '\n'.join(json.dumps(record) for record in json_records)
-            jsonl_output_filename = f"azure_image_batch_requests_{timestamp}.jsonl"
-            st.download_button("📥 Download JSONL File", data=jsonl_str, file_name=jsonl_output_filename, mime="application/jsonl")
-
-            st.session_state["processed_df"] = df
+                track_filename = f"azure_image_batch_tracking_{ts}.json"
+                st.download_button("📥 Download Tracking Info", json.dumps(tracking_info, indent=2), file_name=track_filename, mime="application/json")
+    
+                st.balloons()
+    
 
 # ===================== 📥 TAB 2: ALT Text Mapping =====================
 with tab2:
