@@ -1,3 +1,5 @@
 streamlit
 pandas
 ftfy
+openai
+azure-storage-blob
