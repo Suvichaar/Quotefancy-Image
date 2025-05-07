@@ -11,6 +11,8 @@ import random
 import string
 from datetime import datetime, timezone
 import ftfy
+from openai import AzureOpenAI
+
 
 st.set_page_config(page_title="📸 Image Batch Tool", layout="wide")
 
