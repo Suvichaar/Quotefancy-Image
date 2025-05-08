@@ -44,13 +44,12 @@ tabs = st.tabs([
 # ===================== 📤 TAB 1: Upload & Process =====================
 with tab1:
     
-   # ============================ 🔐 Azure Configuration ============================
     client = AzureOpenAI(
         api_key=st.secrets["azure_api_key"],
         api_version="2025-03-01-preview",
         azure_endpoint=st.secrets["azure_endpoint"]
     )
-    
+
     deployment_model = "gpt-4o-global-batch"
     
     # ============================ 🎯 App UI ============================
@@ -129,16 +128,19 @@ with tab1:
             # ============================ ⬆️ Upload JSONL to Azure ============================
             if st.button("🚀 Upload JSONL to Azure and Submit Batch Job"):
                 with st.spinner("Uploading JSONL to Azure..."):
-                    jsonl_io = BytesIO(jsonl_str.encode("utf-8"))
-                    jsonl_io.name = jsonl_filename  # Required by OpenAI SDK
+                    with tempfile.NamedTemporaryFile(mode="w+", suffix=".jsonl", delete=False) as tmpfile:
+                        tmpfile.write(jsonl_str)
+                        tmpfile.flush()
+                        tmpfile.seek(0)
     
-                    batch_file = client.files.create(
-                        file=jsonl_io,
-                        purpose="batch",
-                        extra_body={"expires_after": {"seconds": 1209600, "anchor": "created_at"}}
-                    )
-                    file_id = batch_file.id
-                    st.success("✅ JSONL uploaded to Azure.")
+                        with open(tmpfile.name, "rb") as f:
+                            batch_file = client.files.create(
+                                file=f,
+                                purpose="batch",
+                                extra_body={"expires_after": {"seconds": 1209600, "anchor": "created_at"}}
+                            )
+                            file_id = batch_file.id
+                            st.success("✅ JSONL uploaded to Azure.")
     
                 # ============================ 🚀 Submit Batch Job ============================
                 with st.spinner("Submitting batch job..."):
@@ -163,6 +165,8 @@ with tab1:
                 st.download_button("📥 Download Tracking Info", json.dumps(tracking_info, indent=2), file_name=track_filename, mime="application/json")
     
                 st.balloons()
+    
+   
 
 # ===================== 📤 TAB 1: Upload & Process =====================
 with tab2:
