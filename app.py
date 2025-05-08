@@ -613,32 +613,43 @@ with tab9:
 # ===================== 🧹 TAB 10: Add Random Video Rows + Circular Navigation (Final) =====================
 
 with tab10:
-
-    st.title("🎬 Video Metadata Merger (Google Sheets API)")
+    
+    st.title("🎬 Video Metadata Merger for Web Stories")
     
     # ================== 📥 Upload Main Dataset ==================
     main_file = st.file_uploader("📁 Upload your main dataset (quotes/stories)", type=["csv"])
     
-    # ================== 🔌 Connect to Google Sheets ==================
+    # ================== 🔌 Extract Sheet ID from URL ==================
+    def extract_sheet_id(url):
+        match = re.search(r"/d/([a-zA-Z0-9-_]+)", url)
+        if not match:
+            raise ValueError("❌ No key could be detected in Google Sheet URL.")
+        return match.group(1)
+    
+    # ================== 🔌 Load Video Sheet via API ==================
     def load_video_sheet(sheet_url, worksheet_name="Sheet1"):
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
         client = gspread.authorize(creds)
-        sheet = client.open_by_url(sheet_url)
+    
+        sheet_id = extract_sheet_id(sheet_url)
+        sheet = client.open_by_key(sheet_id)
         worksheet = sheet.worksheet(worksheet_name)
         return pd.DataFrame(worksheet.get_all_records())
     
+    # ================== 🧾 Get Sheet URL Input ==================
     sheet_url = st.text_input("🔗 Enter public Google Sheet URL containing video metadata")
     
     if main_file and sheet_url:
         main_df = pd.read_csv(main_file)
+    
         try:
             video_df = load_video_sheet(sheet_url)
         except Exception as e:
             st.error(f"❌ Failed to load video sheet: {e}")
             st.stop()
     
-        # ================== 🧱 Column Renaming if Needed ==================
+        # ================== 🧱 Rename Columns if Needed ==================
         rename_map = {
             "{{Author}}": "{{writername}}",
             "{{potraightcoverresize}}": "{{potraightcoverurl}}",
@@ -651,15 +662,15 @@ with tab10:
             if old_col in main_df.columns:
                 main_df.rename(columns={old_col: new_col}, inplace=True)
     
-        # ================== 🎲 Assign Random Video Row to Each Row ==================
+        # ================== 🎲 Assign Random Video Rows ==================
         selected_columns = ["{{s10video1}}", "{{hookline}}", "{{s10alt1}}", "{{videoscreenshot}}", "{{s10caption1}}"]
         if not all(col in video_df.columns for col in selected_columns):
-            st.error("❌ Video sheet is missing required columns.")
+            st.error(f"❌ Google Sheet is missing required columns: {selected_columns}")
             st.stop()
     
         random_video_rows = video_df[selected_columns].sample(n=len(main_df), replace=True).reset_index(drop=True)
     
-        # ================== 🔁 Story Navigation Logic ==================
+        # ================== 🔁 Prev/Next Story Logic ==================
         main_df["{{prevstorytitle}}"] = main_df["{{storytitle}}"].shift(1)
         main_df["{{prevstorylink}}"] = main_df["{{canurl}}"].shift(1)
         main_df.loc[0, "{{prevstorytitle}}"] = main_df.loc[main_df.index[-1], "{{storytitle}}"]
@@ -678,20 +689,24 @@ with tab10:
         main_df.loc[last_index, "{{s11paragraph1}}"] = main_df.loc[1, "{{storytitle}}"]
         main_df.loc[last_index, "{{s11btnlink}}"] = main_df.loc[1, "{{canurl}}"]
     
-        # ================== 🔗 Combine Final Output ==================
+        # ================== 🔗 Combine and Download ==================
         final_df = pd.concat([main_df.reset_index(drop=True), random_video_rows], axis=1)
-    
-        # ================== 💾 Download ==================
-        timestamp = int(time.time())
-        output_file = f"Video_data_added_{timestamp}.csv"
     
         st.subheader("✅ Preview of Merged Data")
         st.dataframe(final_df.head())
     
         csv_buffer = StringIO()
         final_df.to_csv(csv_buffer, index=False)
-        st.download_button("📥 Download Final CSV", data=csv_buffer.getvalue(), file_name=output_file, mime="text/csv")
     
+        output_file = f"Video_data_added_{int(time.time())}.csv"
+    
+        st.download_button(
+            label="📥 Download Final CSV",
+            data=csv_buffer.getvalue(),
+            file_name=output_file,
+            mime="text/csv"
+        )
+        
 
 # ===================== 🧹 TAB 11: Final Column Order Template Reorder =====================
 
