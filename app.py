@@ -615,36 +615,27 @@ with tab9:
 with tab10:
     
     st.title("🎬 Video Metadata Merger for Web Stories")
-    
+
     # ================== 📥 Upload Main Dataset ==================
     main_file = st.file_uploader("📁 Upload your main dataset (quotes/stories)", type=["csv"])
     
-    # ================== 🔌 Extract Sheet ID from URL ==================
-    def extract_sheet_id(url):
-        match = re.search(r"/d/([a-zA-Z0-9-_]+)", url)
-        if not match:
-            raise ValueError("❌ No key could be detected in Google Sheet URL.")
-        return match.group(1)
+    # ================== 🔐 Use Fixed Google Sheet ==================
+    FIXED_SHEET_ID = "1W0Uj22tZ9st4QBsIulmSiKAjCmWxCi57TLg-IQASZXE"  # your sheet ID
     
-    # ================== 🔌 Load Video Sheet via API ==================
-    def load_video_sheet(sheet_url, worksheet_name="Sheet1"):
+    def load_video_sheet(worksheet_name="Sheet1"):
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
         client = gspread.authorize(creds)
     
-        sheet_id = extract_sheet_id(sheet_url)
-        sheet = client.open_by_key(sheet_id)
+        sheet = client.open_by_key(FIXED_SHEET_ID)
         worksheet = sheet.worksheet(worksheet_name)
         return pd.DataFrame(worksheet.get_all_records())
     
-    # ================== 🧾 Get Sheet URL Input ==================
-    sheet_url = st.text_input("🔗 Enter public Google Sheet URL containing video metadata")
-    
-    if main_file and sheet_url:
+    if main_file:
         main_df = pd.read_csv(main_file)
     
         try:
-            video_df = load_video_sheet(sheet_url)
+            video_df = load_video_sheet()
         except Exception as e:
             st.error(f"❌ Failed to load video sheet: {e}")
             st.stop()
