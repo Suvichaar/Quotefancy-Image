@@ -615,6 +615,7 @@ with tab9:
 with tab10:
     
     st.title("🎬 Video Metadata Merger for Web Stories")
+    
     # ================== 📥 Upload Files ==================
     main_file = st.file_uploader("📁 Upload your main dataset (quotes/stories)", type=["csv"])
     video_file = st.file_uploader("📁 Upload your Video Metadata CSV (video-sheets.csv)", type=["csv"])
@@ -671,7 +672,11 @@ with tab10:
         # ================== 🧹 Clean for Streamlit display ==================
         final_df.columns = final_df.columns.map(str)
         for col in final_df.columns:
-            final_df[col] = final_df[col].astype(str).str.slice(0, 500)
+            try:
+                # Safely slice strings to 500 characters
+                final_df[col] = final_df[col].astype(str).apply(lambda x: x[:500] if isinstance(x, str) else x)
+            except Exception as e:
+                st.warning(f"⚠️ Skipped column {col} due to error: {e}")
     
         # ================== 📋 Preview and Download ==================
         st.subheader("✅ Preview of Merged Data")
