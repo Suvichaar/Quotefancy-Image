@@ -620,11 +620,10 @@ with tab10:
     video_file = st.file_uploader("📁 Upload your Video Metadata CSV (video-sheets.csv)", type=["csv"])
     
     if main_file and video_file:
-        # ================== 📄 Read both CSVs ==================
         main_df = pd.read_csv(main_file)
         video_df = pd.read_csv(video_file)
     
-        # ================== 🧱 Rename columns BEFORE further processing ==================
+        # ================== 🧱 Rename columns BEFORE accessing ==================
         rename_map = {
             "{{Author}}": "{{writername}}",
             "{{potraightcoverresize}}": "{{potraightcoverurl}}",
@@ -635,23 +634,22 @@ with tab10:
         }
         main_df.rename(columns=rename_map, inplace=True)
     
-        # ================== ✅ Validate required columns in main_df ==================
+        # ================== ✅ Validate required columns ==================
         required_columns_main = ["{{storytitle}}", "{{canurl}}", "{{squarecoverurl}}", "{{s1alt1}}"]
-        missing_cols = [col for col in required_columns_main if col not in main_df.columns]
-        if missing_cols:
-            st.error(f"❌ Main CSV is missing required columns: {missing_cols}")
+        required_columns_video = ["{{s10video1}}", "{{hookline}}", "{{s10alt1}}", "{{videoscreenshot}}", "{{s10caption1}}"]
+    
+        if not all(col in main_df.columns for col in required_columns_main):
+            st.error("❌ Main CSV is missing required columns.")
             st.stop()
     
-        # ================== ✅ Validate required columns in video_df ==================
-        selected_columns = ["{{s10video1}}", "{{hookline}}", "{{s10alt1}}", "{{videoscreenshot}}", "{{s10caption1}}"]
-        if not all(col in video_df.columns for col in selected_columns):
-            st.error(f"❌ Video CSV is missing required columns: {selected_columns}")
+        if not all(col in video_df.columns for col in required_columns_video):
+            st.error("❌ Video CSV is missing required columns.")
             st.stop()
     
-        # ================== 🎲 Assign random video rows ==================
-        random_video_rows = video_df[selected_columns].sample(n=len(main_df), replace=True).reset_index(drop=True)
+        # ================== 🎲 Random video metadata ==================
+        random_video_rows = video_df[required_columns_video].sample(n=len(main_df), replace=True).reset_index(drop=True)
     
-        # ================== 🔁 Previous/Next story logic ==================
+        # ================== 🔁 Circular next/prev story logic ==================
         main_df["{{prevstorytitle}}"] = main_df["{{storytitle}}"].shift(1)
         main_df["{{prevstorylink}}"] = main_df["{{canurl}}"].shift(1)
         main_df.loc[0, "{{prevstorytitle}}"] = main_df.loc[main_df.index[-1], "{{storytitle}}"]
@@ -663,35 +661,25 @@ with tab10:
         main_df["{{s11paragraph1}}"] = main_df["{{storytitle}}"].shift(-1)
         main_df["{{s11btnlink}}"] = main_df["{{canurl}}"].shift(-1)
     
-        last_index = main_df.index[-1]
-        main_df.loc[last_index, "{{nextstorytitle}}"] = main_df.loc[1, "{{storytitle}}"]
-        main_df.loc[last_index, "{{nextstoryimage}}"] = main_df.loc[1, "{{squarecoverurl}}"]
-        main_df.loc[last_index, "{{nextstoryimagealt}}"] = main_df.loc[1, "{{s1alt1}}"]
-        main_df.loc[last_index, "{{s11paragraph1}}"] = main_df.loc[1, "{{storytitle}}"]
-        main_df.loc[last_index, "{{s11btnlink}}"] = main_df.loc[1, "{{canurl}}"]
+        last = main_df.index[-1]
+        main_df.loc[last, "{{nextstorytitle}}"] = main_df.loc[1, "{{storytitle}}"]
+        main_df.loc[last, "{{nextstoryimage}}"] = main_df.loc[1, "{{squarecoverurl}}"]
+        main_df.loc[last, "{{nextstoryimagealt}}"] = main_df.loc[1, "{{s1alt1}}"]
+        main_df.loc[last, "{{s11paragraph1}}"] = main_df.loc[1, "{{storytitle}}"]
+        main_df.loc[last, "{{s11btnlink}}"] = main_df.loc[1, "{{canurl}}"]
     
-        # ================== 🔗 Combine datasets ==================
+        # ================== 🔗 Merge ==================
         final_df = pd.concat([main_df.reset_index(drop=True), random_video_rows], axis=1)
     
-        # ================== 🧹 Convert entire final_df to strings (sliced to 500 chars) ==================
-        # This step ensures all data is a plain string and avoids Arrow conversion errors.
-        final_df = final_df.applymap(lambda x: str(x)[:500])
-    
-        # ================== 📋 Preview and Download ==================
-        st.subheader("✅ Preview of Merged Data")
-        st.dataframe(final_df.head())
-    
+        # ================== 💾 Prepare CSV ==================
         csv_buffer = StringIO()
         final_df.to_csv(csv_buffer, index=False)
+        filename = f"Video_data_added_{int(time.time())}.csv"
     
-        output_file = f"Video_data_added_{int(time.time())}.csv"
+        # ================== 📥 Download ==================
+        st.success("✅ Processing complete. Click below to download your merged file.")
+        st.download_button("📥 Download Final CSV", data=csv_buffer.getvalue(), file_name=filename, mime="text/csv")
     
-        st.download_button(
-            label="📥 Download Final CSV",
-            data=csv_buffer.getvalue(),
-            file_name=output_file,
-            mime="text/csv"
-        )
     
 # ===================== 🧹 TAB 11: Final Column Order Template Reorder =====================
 
