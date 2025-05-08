@@ -614,7 +614,7 @@ with tab9:
 
 with tab10:
     st.title("🎬 Video Metadata Merger for Web Stories")
-
+    
     # ================== 📥 Upload Files ==================
     main_file = st.file_uploader("📁 Upload your main dataset (quotes/stories)", type=["csv"])
     video_file = st.file_uploader("📁 Upload your Video Metadata CSV (video-sheets.csv)", type=["csv"])
@@ -624,7 +624,7 @@ with tab10:
         main_df = pd.read_csv(main_file)
         video_df = pd.read_csv(video_file)
     
-        # ================== 🧱 Rename columns BEFORE validation ==================
+        # ================== 🧱 Rename columns BEFORE further processing ==================
         rename_map = {
             "{{Author}}": "{{writername}}",
             "{{potraightcoverresize}}": "{{potraightcoverurl}}",
@@ -642,7 +642,7 @@ with tab10:
             st.error(f"❌ Main CSV is missing required columns: {missing_cols}")
             st.stop()
     
-        # ✅ Validate video_df required columns
+        # ================== ✅ Validate required columns in video_df ==================
         selected_columns = ["{{s10video1}}", "{{hookline}}", "{{s10alt1}}", "{{videoscreenshot}}", "{{s10caption1}}"]
         if not all(col in video_df.columns for col in selected_columns):
             st.error(f"❌ Video CSV is missing required columns: {selected_columns}")
@@ -673,13 +673,9 @@ with tab10:
         # ================== 🔗 Combine datasets ==================
         final_df = pd.concat([main_df.reset_index(drop=True), random_video_rows], axis=1)
     
-        # ================== 🧹 Clean for Streamlit display ==================
-        final_df.columns = final_df.columns.map(str)
-        for col in final_df.columns:
-            try:
-                final_df[col] = final_df[col].astype(str).apply(lambda x: x[:500] if isinstance(x, str) else x)
-            except Exception as e:
-                st.warning(f"⚠️ Skipped column {col} due to error: {e}")
+        # ================== 🧹 Convert entire final_df to strings (sliced to 500 chars) ==================
+        # This step ensures all data is a plain string and avoids Arrow conversion errors.
+        final_df = final_df.applymap(lambda x: str(x)[:500])
     
         # ================== 📋 Preview and Download ==================
         st.subheader("✅ Preview of Merged Data")
@@ -696,6 +692,7 @@ with tab10:
             file_name=output_file,
             mime="text/csv"
         )
+    
 # ===================== 🧹 TAB 11: Final Column Order Template Reorder =====================
 
 with tab11:
