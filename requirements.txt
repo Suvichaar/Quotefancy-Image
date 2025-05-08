@@ -3,3 +3,5 @@ pandas
 ftfy
 openai
 azure-storage-blob
+gspread
+oauth2client
