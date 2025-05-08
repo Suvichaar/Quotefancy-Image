@@ -615,21 +615,20 @@ with tab9:
 with tab10:
     
     st.title("🎬 Video Metadata Merger for Web Stories")
-
-    # ================== 📥 Upload Main Dataset ==================
-    main_file = st.file_uploader("📁 Upload your main dataset (quotes/stories)", type=["csv"])
     
-    # ================== 🔐 Use Fixed Google Sheet ==================
-    FIXED_SHEET_ID = "1W0Uj22tZ9st4QBsIulmSiKAjCmWxCi57TLg-IQASZXE"  # your sheet ID
+    # ================== 🔐 Fixed Google Sheet ID ==================
+    FIXED_SHEET_ID = "1W0Uj22tZ9st4QBsIulmSiKAjCmWxCi57TLg-IQASZXE"
     
     def load_video_sheet(worksheet_name="Sheet1"):
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
         client = gspread.authorize(creds)
-    
         sheet = client.open_by_key(FIXED_SHEET_ID)
         worksheet = sheet.worksheet(worksheet_name)
         return pd.DataFrame(worksheet.get_all_records())
+    
+    # ================== 📥 Upload Main Dataset ==================
+    main_file = st.file_uploader("📁 Upload your main dataset (quotes/stories)", type=["csv"])
     
     if main_file:
         main_df = pd.read_csv(main_file)
@@ -640,7 +639,7 @@ with tab10:
             st.error(f"❌ Failed to load video sheet: {e}")
             st.stop()
     
-        # ================== 🧱 Rename Columns if Needed ==================
+        # ✅ Rename Columns If Needed
         rename_map = {
             "{{Author}}": "{{writername}}",
             "{{potraightcoverresize}}": "{{potraightcoverurl}}",
@@ -653,7 +652,7 @@ with tab10:
             if old_col in main_df.columns:
                 main_df.rename(columns={old_col: new_col}, inplace=True)
     
-        # ================== 🎲 Assign Random Video Rows ==================
+        # ✅ Select and Sample Video Metadata
         selected_columns = ["{{s10video1}}", "{{hookline}}", "{{s10alt1}}", "{{videoscreenshot}}", "{{s10caption1}}"]
         if not all(col in video_df.columns for col in selected_columns):
             st.error(f"❌ Google Sheet is missing required columns: {selected_columns}")
@@ -661,7 +660,7 @@ with tab10:
     
         random_video_rows = video_df[selected_columns].sample(n=len(main_df), replace=True).reset_index(drop=True)
     
-        # ================== 🔁 Prev/Next Story Logic ==================
+        # ✅ Add Previous/Next Story Logic
         main_df["{{prevstorytitle}}"] = main_df["{{storytitle}}"].shift(1)
         main_df["{{prevstorylink}}"] = main_df["{{canurl}}"].shift(1)
         main_df.loc[0, "{{prevstorytitle}}"] = main_df.loc[main_df.index[-1], "{{storytitle}}"]
@@ -680,7 +679,7 @@ with tab10:
         main_df.loc[last_index, "{{s11paragraph1}}"] = main_df.loc[1, "{{storytitle}}"]
         main_df.loc[last_index, "{{s11btnlink}}"] = main_df.loc[1, "{{canurl}}"]
     
-        # ================== 🔗 Combine and Download ==================
+        # ✅ Merge & Download
         final_df = pd.concat([main_df.reset_index(drop=True), random_video_rows], axis=1)
     
         st.subheader("✅ Preview of Merged Data")
@@ -688,7 +687,6 @@ with tab10:
     
         csv_buffer = StringIO()
         final_df.to_csv(csv_buffer, index=False)
-    
         output_file = f"Video_data_added_{int(time.time())}.csv"
     
         st.download_button(
@@ -697,7 +695,7 @@ with tab10:
             file_name=output_file,
             mime="text/csv"
         )
-        
+            
 
 # ===================== 🧹 TAB 11: Final Column Order Template Reorder =====================
 
