@@ -13,6 +13,7 @@ import random
 import string
 from datetime import datetime, timezone
 import ftfy
+import tempfile
 from openai import AzureOpenAI
 from azure.storage.blob import (
     BlobServiceClient,
