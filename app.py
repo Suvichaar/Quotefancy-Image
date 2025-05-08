@@ -691,7 +691,7 @@ with tab10:
         csv_buffer = StringIO()
         final_df.to_csv(csv_buffer, index=False)
         st.download_button("📥 Download Final CSV", data=csv_buffer.getvalue(), file_name=output_file, mime="text/csv")
-            )
+    
 
 # ===================== 🧹 TAB 11: Final Column Order Template Reorder =====================
 
