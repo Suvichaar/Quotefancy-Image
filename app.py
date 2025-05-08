@@ -7,6 +7,8 @@ import unicodedata
 from io import StringIO
 from collections import defaultdict
 import base64
+from io import StringIO, BytesIO
+from openai import AzureOpenAI
 import random
 import string
 from datetime import datetime, timezone
@@ -42,7 +44,7 @@ tabs = st.tabs([
 # ===================== 📤 TAB 1: Upload & Process =====================
 with tab1:
     
-    # ============================ 🔐 Azure Configuration ============================
+   # ============================ 🔐 Azure Configuration ============================
     client = AzureOpenAI(
         api_key=st.secrets["azure_api_key"],
         api_version="2025-03-01-preview",
@@ -87,6 +89,7 @@ with tab1:
             csv_output_filename = f"Image_Data_Custom_id_prompt_{ts}.csv"
             st.success("✅ Data processed. Preview below:")
             st.dataframe(df.head())
+    
             csv_buffer = StringIO()
             df.to_csv(csv_buffer, index=False)
             st.download_button("📥 Download CSV with Prompts", csv_buffer.getvalue(), file_name=csv_output_filename, mime="text/csv")
@@ -126,8 +129,11 @@ with tab1:
             # ============================ ⬆️ Upload JSONL to Azure ============================
             if st.button("🚀 Upload JSONL to Azure and Submit Batch Job"):
                 with st.spinner("Uploading JSONL to Azure..."):
+                    jsonl_io = BytesIO(jsonl_str.encode("utf-8"))
+                    jsonl_io.name = jsonl_filename  # Required by OpenAI SDK
+    
                     batch_file = client.files.create(
-                        file=StringIO(jsonl_str),
+                        file=jsonl_io,
                         purpose="batch",
                         extra_body={"expires_after": {"seconds": 1209600, "anchor": "created_at"}}
                     )
