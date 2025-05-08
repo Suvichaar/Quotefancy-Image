@@ -620,10 +620,11 @@ with tab10:
     video_file = st.file_uploader("📁 Upload your Video Metadata CSV (video-sheets.csv)", type=["csv"])
     
     if main_file and video_file:
+        # ================== 📄 Read both CSVs ==================
         main_df = pd.read_csv(main_file)
         video_df = pd.read_csv(video_file)
     
-        # ✅ Rename Columns If Needed
+        # ================== 🧱 Rename columns if needed ==================
         rename_map = {
             "{{Author}}": "{{writername}}",
             "{{potraightcoverresize}}": "{{potraightcoverurl}}",
@@ -636,16 +637,16 @@ with tab10:
             if old_col in main_df.columns:
                 main_df.rename(columns={old_col: new_col}, inplace=True)
     
-        # ✅ Select Required Columns
+        # ================== ✅ Required columns in video metadata ==================
         selected_columns = ["{{s10video1}}", "{{hookline}}", "{{s10alt1}}", "{{videoscreenshot}}", "{{s10caption1}}"]
         if not all(col in video_df.columns for col in selected_columns):
             st.error(f"❌ Uploaded video CSV is missing required columns: {selected_columns}")
             st.stop()
     
-        # ✅ Assign Random Video Rows
+        # ================== 🎲 Assign random video rows ==================
         random_video_rows = video_df[selected_columns].sample(n=len(main_df), replace=True).reset_index(drop=True)
     
-        # ✅ Add Previous/Next Story Logic
+        # ================== 🔁 Previous/next story logic ==================
         main_df["{{prevstorytitle}}"] = main_df["{{storytitle}}"].shift(1)
         main_df["{{prevstorylink}}"] = main_df["{{canurl}}"].shift(1)
         main_df.loc[0, "{{prevstorytitle}}"] = main_df.loc[main_df.index[-1], "{{storytitle}}"]
@@ -664,14 +665,21 @@ with tab10:
         main_df.loc[last_index, "{{s11paragraph1}}"] = main_df.loc[1, "{{storytitle}}"]
         main_df.loc[last_index, "{{s11btnlink}}"] = main_df.loc[1, "{{canurl}}"]
     
-        # ✅ Combine & Download
+        # ================== 🔗 Combine datasets ==================
         final_df = pd.concat([main_df.reset_index(drop=True), random_video_rows], axis=1)
     
+        # ================== 🧹 Clean for Streamlit display ==================
+        final_df.columns = final_df.columns.map(str)
+        for col in final_df.columns:
+            final_df[col] = final_df[col].astype(str).str.slice(0, 500)
+    
+        # ================== 📋 Preview and Download ==================
         st.subheader("✅ Preview of Merged Data")
         st.dataframe(final_df.head())
     
         csv_buffer = StringIO()
         final_df.to_csv(csv_buffer, index=False)
+    
         output_file = f"Video_data_added_{int(time.time())}.csv"
     
         st.download_button(
