@@ -613,9 +613,8 @@ with tab9:
 # ===================== 🧹 TAB 10: Add Random Video Rows + Circular Navigation (Final) =====================
 
 with tab10:
-    
     st.title("🎬 Video Metadata Merger for Web Stories")
-    
+
     # ================== 📥 Upload Files ==================
     main_file = st.file_uploader("📁 Upload your main dataset (quotes/stories)", type=["csv"])
     video_file = st.file_uploader("📁 Upload your Video Metadata CSV (video-sheets.csv)", type=["csv"])
@@ -625,7 +624,7 @@ with tab10:
         main_df = pd.read_csv(main_file)
         video_df = pd.read_csv(video_file)
     
-        # ================== 🧱 Rename columns if needed ==================
+        # ================== 🧱 Rename columns BEFORE validation ==================
         rename_map = {
             "{{Author}}": "{{writername}}",
             "{{potraightcoverresize}}": "{{potraightcoverurl}}",
@@ -634,20 +633,25 @@ with tab10:
             "{{socialthumbnailcoverresize}}": "{{socialthumbnailcoverurl}}",
             "{{nextstoryimageresize}}": "{{nextstorylink}}"
         }
-        for old_col, new_col in rename_map.items():
-            if old_col in main_df.columns:
-                main_df.rename(columns={old_col: new_col}, inplace=True)
+        main_df.rename(columns=rename_map, inplace=True)
     
-        # ================== ✅ Required columns in video metadata ==================
+        # ================== ✅ Validate required columns in main_df ==================
+        required_columns_main = ["{{storytitle}}", "{{canurl}}", "{{squarecoverurl}}", "{{s1alt1}}"]
+        missing_cols = [col for col in required_columns_main if col not in main_df.columns]
+        if missing_cols:
+            st.error(f"❌ Main CSV is missing required columns: {missing_cols}")
+            st.stop()
+    
+        # ✅ Validate video_df required columns
         selected_columns = ["{{s10video1}}", "{{hookline}}", "{{s10alt1}}", "{{videoscreenshot}}", "{{s10caption1}}"]
         if not all(col in video_df.columns for col in selected_columns):
-            st.error(f"❌ Uploaded video CSV is missing required columns: {selected_columns}")
+            st.error(f"❌ Video CSV is missing required columns: {selected_columns}")
             st.stop()
     
         # ================== 🎲 Assign random video rows ==================
         random_video_rows = video_df[selected_columns].sample(n=len(main_df), replace=True).reset_index(drop=True)
     
-        # ================== 🔁 Previous/next story logic ==================
+        # ================== 🔁 Previous/Next story logic ==================
         main_df["{{prevstorytitle}}"] = main_df["{{storytitle}}"].shift(1)
         main_df["{{prevstorylink}}"] = main_df["{{canurl}}"].shift(1)
         main_df.loc[0, "{{prevstorytitle}}"] = main_df.loc[main_df.index[-1], "{{storytitle}}"]
@@ -673,7 +677,6 @@ with tab10:
         final_df.columns = final_df.columns.map(str)
         for col in final_df.columns:
             try:
-                # Safely slice strings to 500 characters
                 final_df[col] = final_df[col].astype(str).apply(lambda x: x[:500] if isinstance(x, str) else x)
             except Exception as e:
                 st.warning(f"⚠️ Skipped column {col} due to error: {e}")
@@ -693,7 +696,6 @@ with tab10:
             file_name=output_file,
             mime="text/csv"
         )
-
 # ===================== 🧹 TAB 11: Final Column Order Template Reorder =====================
 
 with tab11:
