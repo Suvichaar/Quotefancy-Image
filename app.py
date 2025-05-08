@@ -611,57 +611,79 @@ with tab9:
 # ===================== 🧹 TAB 10: Add Random Video Rows + Circular Navigation (Final) =====================
 
 with tab10:
-    st.title("🎬 Add Random Video Rows + Circular Navigation (Final)")
 
-    main_csv = st.file_uploader("📁 Upload your main dataset (quotes/stories)", type=["csv"], key="main10")
-    video_csv = st.file_uploader("📁 Upload your Video-Sheets.csv file", type=["csv"], key="video10")
-
-    if main_csv and video_csv:
-        main_df = pd.read_csv(main_csv)
-        video_df = pd.read_csv(video_csv)
-
-        if "{{Author}}" in main_df.columns:
-            main_df.rename(columns={"{{Author}}": "{{writername}}"}, inplace=True)
-        if "{{potraightcoverresize}}" in main_df.columns:
-            main_df.rename(columns={"{{potraightcoverresize}}": "{{potraightcoverurl}}"}, inplace=True)
-        if "{{landscapecoverresize}}" in main_df.columns:
-            main_df.rename(columns={"{{landscapecoverresize}}": "{{landscapecoverurl}}"}, inplace=True)
-        if "{{squarecoverresize}}" in main_df.columns:
-            main_df.rename(columns={"{{squarecoverresize}}": "{{squarecoverurl}}"}, inplace=True)
-        if "{{socialthumbnailcoverresize}}" in main_df.columns:
-            main_df.rename(columns={"{{socialthumbnailcoverresize}}": "{{socialthumbnailcoverurl}}"}, inplace=True)
-        if "{{nextstoryimageresize}}" in main_df.columns:
-            main_df.rename(columns={"{{nextstoryimageresize}}": "{{nextstorylink}}"}, inplace=True)
-
+    import streamlit as st
+    import pandas as pd
+    import random
+    import time
+    from io import StringIO
+    
+    st.title("🎬 Video Metadata Merger for Web Stories")
+    
+    # ================== 📤 Upload CSV Files ==================
+    main_file = st.file_uploader("📁 Upload your main dataset (quotes/stories)", type=["csv"])
+    video_file = st.file_uploader("📁 Upload your Video-Sheets.csv file", type=["csv"])
+    
+    if main_file and video_file:
+        main_df = pd.read_csv(main_file)
+        video_df = pd.read_csv(video_file)
+    
+        # ================== 🧱 Column Renaming if Needed ==================
+        rename_map = {
+            "{{Author}}": "{{writername}}",
+            "{{potraightcoverresize}}": "{{potraightcoverurl}}",
+            "{{landscapecoverresize}}": "{{landscapecoverurl}}",
+            "{{squarecoverresize}}": "{{squarecoverurl}}",
+            "{{socialthumbnailcoverresize}}": "{{socialthumbnailcoverurl}}",
+            "{{nextstoryimageresize}}": "{{nextstorylink}}"
+        }
+        for old_col, new_col in rename_map.items():
+            if old_col in main_df.columns:
+                main_df.rename(columns={old_col: new_col}, inplace=True)
+    
+        # ================== 🎲 Assign Random Video Row to Each Row ==================
         selected_columns = ["{{s10video1}}", "{{hookline}}", "{{s10alt1}}", "{{videoscreenshot}}", "{{s10caption1}}"]
         random_video_rows = video_df[selected_columns].sample(n=len(main_df), replace=True).reset_index(drop=True)
-
+    
+        # ================== 🔁 Logic for prevstorytitle and prevstorylink ==================
         main_df["{{prevstorytitle}}"] = main_df["{{storytitle}}"].shift(1)
         main_df["{{prevstorylink}}"] = main_df["{{canurl}}"].shift(1)
         main_df.loc[0, "{{prevstorytitle}}"] = main_df.loc[main_df.index[-1], "{{storytitle}}"]
         main_df.loc[0, "{{prevstorylink}}"] = main_df.loc[main_df.index[-1], "{{canurl}}"]
-
+    
+        # ================== 🔁 Logic for nextstorytitle and related fields ==================
         main_df["{{nextstorytitle}}"] = main_df["{{storytitle}}"].shift(-1)
         main_df["{{nextstoryimage}}"] = main_df["{{squarecoverurl}}"].shift(-1)
         main_df["{{nextstoryimagealt}}"] = main_df["{{s1alt1}}"].shift(-1)
         main_df["{{s11paragraph1}}"] = main_df["{{storytitle}}"].shift(-1)
         main_df["{{s11btnlink}}"] = main_df["{{canurl}}"].shift(-1)
-
+    
+        # 🔁 Circular fallback for last row
         last_index = main_df.index[-1]
         main_df.loc[last_index, "{{nextstorytitle}}"] = main_df.loc[1, "{{storytitle}}"]
         main_df.loc[last_index, "{{nextstoryimage}}"] = main_df.loc[1, "{{squarecoverurl}}"]
         main_df.loc[last_index, "{{nextstoryimagealt}}"] = main_df.loc[1, "{{s1alt1}}"]
         main_df.loc[last_index, "{{s11paragraph1}}"] = main_df.loc[1, "{{storytitle}}"]
         main_df.loc[last_index, "{{s11btnlink}}"] = main_df.loc[1, "{{canurl}}"]
-
+    
+        # ================== 🔗 Combine Random Video Info with Main ==================
         final_df = pd.concat([main_df.reset_index(drop=True), random_video_rows], axis=1)
-
-        st.subheader("✅ Final Merged Data Preview")
-        st.dataframe(final_df.head())
-
-        timestamp = int(pd.Timestamp.now().timestamp())
+    
+        # ================== 💾 Save and Download ==================
+        timestamp = int(time.time())
         output_file = f"Video_data_added_{timestamp}.csv"
-        st.download_button("📥 Download Final Video CSV", data=final_df.to_csv(index=False), file_name=output_file, mime="text/csv")
+    
+        st.subheader("✅ Preview of Merged Data")
+        st.dataframe(final_df.head())
+    
+        csv_buffer = StringIO()
+        final_df.to_csv(csv_buffer, index=False)
+        st.download_button(
+            label="📥 Download Final CSV",
+            data=csv_buffer.getvalue(),
+            file_name=output_file,
+            mime="text/csv"
+        )
 
 # ===================== 🧹 TAB 11: Final Column Order Template Reorder =====================
 
