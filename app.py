@@ -388,11 +388,12 @@ with tab5:
 # ===================== 🧹 TAB 6: Generate Resized Image CDN URLs =====================
 with tab6:
     st.title("🧱 Generate Resized Image CDN URLs")
+    
     uploaded_resize_csv = st.file_uploader("Upload CSV with 's1cdnurl' column", type=["csv"], key="resize")
-
+    
     if uploaded_resize_csv:
         df = pd.read_csv(uploaded_resize_csv)
-
+    
         if 's1cdnurl' not in df.columns:
             st.error("❌ 's1cdnurl' column not found in uploaded file.")
         else:
@@ -401,7 +402,7 @@ with tab6:
                 col = f's{i}cdnurl'
                 if col in df.columns:
                     df.drop(columns=[col], inplace=True)
-
+    
             resize_presets = {
                 "potraightcoverresize": (640, 853),
                 "landscapecoverresize": (853, 640),
@@ -409,28 +410,35 @@ with tab6:
                 "socialthumbnailcoverresize": (300, 300),
                 "nextstoryimageresize": (315, 315)
             }
-
+    
             cdn_prefix_media = "https://media.suvichaar.org/"
+            cdn_prefix_cdn = "https://cdn.suvichaar.org/"
+    
             transformed_df = df.copy()
-
+    
             for preset_name, (width, height) in resize_presets.items():
                 transformed_urls = []
-
+    
                 for url in transformed_df["s1cdnurl"]:
                     try:
                         if not isinstance(url, str):
                             raise ValueError("Invalid URL")
-
-                        if "suvichaar.org/media/" in url:
-                            key_path = url.split("suvichaar.org/media/")[-1]
-                            normalized_url = f"{cdn_prefix_media}{key_path}"
+    
+                        # Step 1: Normalize domain
+                        url = url.strip()
+                        if url.startswith(cdn_prefix_cdn):
+                            url = url.replace(cdn_prefix_cdn, cdn_prefix_media)
+    
+                        # Step 2: Extract key path
+                        if url.startswith(cdn_prefix_media):
+                            key_path = url.replace(cdn_prefix_media, "")
                         else:
-                            raise ValueError("Invalid CDN-style URL")
-
-                        key_value = normalized_url.replace(cdn_prefix_media, "")
+                            raise ValueError("URL does not start with expected CDN domain")
+    
+                        # Step 3: Encode transformation template
                         template = {
                             "bucket": "suvichaarapp",
-                            "key": key_value,
+                            "key": key_path,
                             "edits": {
                                 "resize": {
                                     "width": width,
@@ -439,18 +447,19 @@ with tab6:
                                 }
                             }
                         }
-
+    
                         encoded = base64.urlsafe_b64encode(json.dumps(template).encode()).decode()
                         final_url = f"{cdn_prefix_media}{encoded}"
                         transformed_urls.append(final_url)
                     except Exception:
                         transformed_urls.append("ERROR")
-
+    
                 transformed_df[preset_name] = transformed_urls
-
+    
+            # ✅ Preview and Download
             st.subheader("✅ Resized CDN URL Preview")
             st.dataframe(transformed_df.head())
-
+    
             timestamp = int(time.time())
             output_filename = f"Resizer_Added_{timestamp}.csv"
             st.download_button("📥 Download Resized URL CSV", data=transformed_df.to_csv(index=False), file_name=output_filename, mime="text/csv")
